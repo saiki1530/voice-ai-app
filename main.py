@@ -31,8 +31,8 @@ def serve_frontend():
 
 class Prompt(BaseModel):
     prompt: str
+    lang: str  # Thêm ngôn ngữ
 
-# Hàm chuẩn hóa chuỗi: bỏ dấu và viết thường
 def normalize(text):
     text = text.lower().strip()
     text = unicodedata.normalize('NFD', text)
@@ -44,6 +44,7 @@ async def ask(prompt: Prompt):
     try:
         user_question_raw = prompt.prompt
         user_question = normalize(user_question_raw)
+        lang = prompt.lang
 
         normalized_static_qa = {normalize(k): v for k, v in STATIC_QA.items()}
         matches = get_close_matches(user_question, normalized_static_qa.keys(), n=1, cutoff=0.5)
@@ -52,10 +53,16 @@ async def ask(prompt: Prompt):
             matched_key = matches[0]
             return {"answer": normalized_static_qa[matched_key]}
 
-        # Nếu không khớp, gọi Gemini
+        # Ngôn ngữ tương ứng
+        prefix_by_lang = {
+            "vi-VN": "Trả lời bằng tiếng Việt:",
+            "en-US": "Answer in English:",
+            "ja-JP": "日本語で答えてください："
+        }
+
+        prompt_lang = f"{prefix_by_lang.get(lang, 'Answer:')} {user_question_raw}"
         model = genai.GenerativeModel("gemini-1.5-flash")
-        prompt_vi = f"Trả lời bằng tiếng Việt: {user_question_raw}"
-        response = await run_in_threadpool(model.generate_content, prompt_vi)
+        response = await run_in_threadpool(model.generate_content, prompt_lang)
         ai_reply = response.candidates[0].content.parts[0].text
         return {"answer": ai_reply}
 
