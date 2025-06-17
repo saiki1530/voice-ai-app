@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,15 +12,15 @@ import unicodedata
 import os
 import requests
 import io
-import uuid
-import time
 
+# Load biến môi trường
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 FPT_API_KEY = os.getenv("FPT_TTS_API_KEY")
 
 app = FastAPI()
 
+# CORS cho phép từ mọi nguồn
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,16 +28,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount thư mục tĩnh
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 def serve_frontend():
     return FileResponse("static/index.html")
 
+# Dữ liệu từ client
 class Prompt(BaseModel):
     prompt: str
     lang: str = "vi-VN"
 
+# Chuẩn hóa tiếng Việt không dấu
 def normalize(text):
     text = text.lower().strip()
     text = unicodedata.normalize('NFD', text)
@@ -50,6 +53,7 @@ async def ask(prompt: Prompt):
         user_question_raw = prompt.prompt
         user_question = normalize(user_question_raw)
 
+        # Tìm trong STATIC_QA trước
         normalized_static_qa = {normalize(k): v for k, v in STATIC_QA.items()}
         matches = get_close_matches(user_question, normalized_static_qa.keys(), n=1, cutoff=0.5)
 
@@ -68,6 +72,7 @@ async def ask(prompt: Prompt):
             response = await run_in_threadpool(model.generate_content, prompt_text)
             ai_reply = response.candidates[0].content.parts[0].text
 
+        # Gửi văn bản đến FPT nếu ngôn ngữ là tiếng Việt
         audio_url = None
         if prompt.lang == "vi-VN" and FPT_API_KEY:
             tts_response = await run_in_threadpool(
@@ -80,23 +85,8 @@ async def ask(prompt: Prompt):
                 },
                 data=ai_reply.encode("utf-8")
             )
-
             if tts_response.status_code == 200:
-                async_url = tts_response.json().get("async")
-                time.sleep(2)  # đợi FPT xử lý file
-
-                try:
-                    audio_data = requests.get(async_url).content
-                    file_id = str(uuid.uuid4())
-                    file_path = f"static/audio/{file_id}.mp3"
-
-                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                    with open(file_path, "wb") as f:
-                        f.write(audio_data)
-
-                    audio_url = f"/static/audio/{file_id}.mp3"
-                except:
-                    audio_url = None
+                audio_url = tts_response.json().get("async")
 
         return {
             "answer": ai_reply,
@@ -120,7 +110,6 @@ def get_tts(text: str):
 
     if res.status_code == 200:
         audio_url = res.json().get("async")
-        time.sleep(2)
         audio_data = requests.get(audio_url).content
         return StreamingResponse(io.BytesIO(audio_data), media_type="audio/mp3")
     else:
