@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="vi">
-
 <head>
   <meta charset="UTF-8">
   <title>Voice AI</title>
 </head>
-
 <body>
   <h2>Hỏi AI bằng giọng nói hoặc gõ câu hỏi</h2>
   <button onclick="startRecording()">Nhấn để nói</button>
@@ -22,38 +20,34 @@
     function loadVoices() {
       const voices = speechSynthesis.getVoices();
       vietnameseVoice = voices.find(voice => voice.lang === "vi-VN");
-
       if (!vietnameseVoice) {
-        console.warn("Không tìm thấy giọng tiếng Việt. Trình duyệt sẽ dùng giọng mặc định.");
+        console.warn("Không tìm thấy giọng tiếng Việt.");
       }
     }
     window.speechSynthesis.onvoiceschanged = loadVoices;
     loadVoices();
+
     function speakVietnamese(text) {
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = "vi-VN";
-
       if (vietnameseVoice) {
         utter.voice = vietnameseVoice;
       }
-
       speechSynthesis.speak(utter);
     }
+
     async function sendToAPI(text) {
       document.getElementById("question").innerText = text;
       try {
-         const res = await fetch("https://voice-ai-app.onrender.com/api/ask", {
+        const res = await fetch("https://voice-ai-app.onrender.com/api/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt: text })
         });
 
         const data = await res.json();
-        console.log("Phản hồi từ server:", data);
-
         const answer = data.answer || "Không có câu trả lời.";
         document.getElementById("answer").innerText = answer;
-
         speakVietnamese(answer);
       } catch (err) {
         console.error("Lỗi fetch:", err);
@@ -61,16 +55,17 @@
         speakVietnamese("Không thể kết nối tới server.");
       }
     }
+
     function startRecording() {
       const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
       recognition.lang = 'vi-VN';
       recognition.start();
-
       recognition.onresult = function (event) {
         const text = event.results[0][0].transcript;
         sendToAPI(text);
       };
     }
+
     function askText() {
       const text = document.getElementById("textInput").value;
       if (text.trim()) {
@@ -79,5 +74,4 @@
     }
   </script>
 </body>
-
 </html>
