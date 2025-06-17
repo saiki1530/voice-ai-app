@@ -30,7 +30,7 @@
   <p><strong>Bạn hỏi:</strong> <span id="question"></span></p>
   <p><strong>AI trả lời:</strong> <span id="answer"></span></p>
 
- <script>
+<script>
   let currentUtterance = null;
 
   function loadVoices() {
@@ -39,7 +39,9 @@
     const voiceSelect = document.getElementById("voiceSelect");
     voiceSelect.innerHTML = "";
 
-    const filteredVoices = voices.filter(voice => voice.lang.startsWith(selectedLang));
+    // Lọc giọng đúng ngôn ngữ
+    const filteredVoices = voices.filter(voice => voice.lang === selectedLang);
+
     if (filteredVoices.length === 0) {
       const opt = document.createElement("option");
       opt.textContent = "Không có giọng cho ngôn ngữ này";
@@ -54,6 +56,20 @@
       opt.textContent = `${voice.name} (${voice.lang})`;
       voiceSelect.appendChild(opt);
     });
+
+    // Ưu tiên chọn giọng mặc định đẹp nếu có
+    const defaultVoiceNameMap = {
+      'vi-VN': 'Google Tiếng Việt',
+      'en-US': 'Google US English',
+      'ja-JP': 'Google 日本語'
+    };
+
+    const defaultVoice = filteredVoices.find(v => v.name === defaultVoiceNameMap[selectedLang]);
+    if (defaultVoice) {
+      voiceSelect.value = defaultVoice.name;
+    } else {
+      voiceSelect.selectedIndex = 0; // fallback
+    }
   }
 
   window.speechSynthesis.onvoiceschanged = loadVoices;
@@ -123,6 +139,7 @@
     }
   }
 </script>
+
 
 </body>
 </html>
