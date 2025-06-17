@@ -13,10 +13,10 @@ import os
 import requests
 import io
 import uuid
+import time
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
 FPT_API_KEY = os.getenv("FPT_TTS_API_KEY")
 
 app = FastAPI()
@@ -80,8 +80,23 @@ async def ask(prompt: Prompt):
                 },
                 data=ai_reply.encode("utf-8")
             )
+
             if tts_response.status_code == 200:
-                audio_url = tts_response.json().get("async")
+                async_url = tts_response.json().get("async")
+                time.sleep(2)  # đợi FPT xử lý file
+
+                try:
+                    audio_data = requests.get(async_url).content
+                    file_id = str(uuid.uuid4())
+                    file_path = f"static/audio/{file_id}.mp3"
+
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    with open(file_path, "wb") as f:
+                        f.write(audio_data)
+
+                    audio_url = f"/static/audio/{file_id}.mp3"
+                except:
+                    audio_url = None
 
         return {
             "answer": ai_reply,
@@ -105,6 +120,7 @@ def get_tts(text: str):
 
     if res.status_code == 200:
         audio_url = res.json().get("async")
+        time.sleep(2)
         audio_data = requests.get(audio_url).content
         return StreamingResponse(io.BytesIO(audio_data), media_type="audio/mp3")
     else:
