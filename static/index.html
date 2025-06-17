@@ -106,9 +106,16 @@
       });
 
       const data = await res.json();
-      const answer = data.answer || "Không có câu trả lời.";
-      document.getElementById("answer").innerText = answer;
-      speakText(answer);
+     const answer = data.answer || "Không có câu trả lời.";
+document.getElementById("answer").innerText = answer;
+
+if (data.audio_url && document.getElementById("languageSelect").value === "vi-VN") {
+  const audio = new Audio(data.audio_url);
+  audio.play();
+} else {
+  speakText(answer);
+}
+
     } catch (err) {
       console.error("Lỗi fetch:", err);
       document.getElementById("answer").innerText = "Không thể kết nối tới server.";
