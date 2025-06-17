@@ -29,99 +29,95 @@
   <p><strong>Bạn hỏi:</strong> <span id="question"></span></p>
   <p><strong>AI trả lời:</strong> <span id="answer"></span></p>
 
-  <script>
-    let currentUtterance = null;
+<script>
+  let voices = [];
 
-    function loadVoices() {
-      const voices = speechSynthesis.getVoices();
-      const selectedLang = document.getElementById("languageSelect").value;
-      const voiceSelect = document.getElementById("voiceSelect");
-      voiceSelect.innerHTML = "";
+  // Tải danh sách giọng nói
+  function loadVoices() {
+    voices = speechSynthesis.getVoices();
+    console.log("Available voices:", voices.map(v => `${v.name} (${v.lang})`));
+  }
 
-      const filteredVoices = voices.filter(voice => voice.lang === selectedLang);
-      if (filteredVoices.length === 0) {
-        const opt = document.createElement("option");
-        opt.textContent = "Không có giọng cho ngôn ngữ này";
-        voiceSelect.appendChild(opt);
-        console.warn("Không tìm thấy giọng đọc:", selectedLang);
-        return;
-      }
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+  loadVoices();
 
-      filteredVoices.forEach((voice, index) => {
-        const opt = document.createElement("option");
-        opt.value = index;
-        opt.textContent = `${voice.name} (${voice.lang})`;
-        voiceSelect.appendChild(opt);
+  // Phát tiếng Anh bằng speechSynthesis
+  function speakEnglish(text) {
+    const englishVoice = voices.find(v =>
+      v.lang.startsWith("en") && v.name.toLowerCase().includes("google")
+    );
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "en-US";
+    if (englishVoice) utter.voice = englishVoice;
+    speechSynthesis.speak(utter);
+  }
+
+  // Phát tiếng Việt bằng API FPT.AI
+  async function speakVietnameseFPT(text) {
+    const res = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+
+    const data = await res.json();
+    if (data.audio_url) {
+      const audio = new Audio(data.audio_url);
+      audio.play();
+    } else {
+      alert("Không thể phát tiếng Việt.");
+    }
+  }
+
+  // Nhận diện tiếng và chọn cách phát
+  function detectLangAndSpeak(text) {
+    const isEnglish = /^[a-zA-Z0-9\s.,!?'"():\-]+$/.test(text.trim());
+    if (isEnglish) {
+      speakEnglish(text);
+    } else {
+      speakVietnameseFPT(text);
+    }
+  }
+
+  // Gửi câu hỏi đến API AI backend
+  async function sendToAPI(text) {
+    document.getElementById("question").innerText = text;
+    try {
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text })
       });
+
+      const data = await res.json();
+      const answer = data.answer || "Không có câu trả lời.";
+      document.getElementById("answer").innerText = answer;
+      detectLangAndSpeak(answer);
+    } catch (err) {
+      console.error("Lỗi fetch:", err);
+      document.getElementById("answer").innerText = "Không thể kết nối tới server.";
     }
+  }
 
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    loadVoices();
+  // Nhận giọng nói từ người dùng
+  function startRecording() {
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'vi-VN';
+    recognition.start();
+    recognition.onresult = function (event) {
+      const text = event.results[0][0].transcript;
+      sendToAPI(text);
+    };
+  }
 
-    function speakVietnamese(text) {
-      stopSpeaking();
-      const voices = speechSynthesis.getVoices();
-      const lang = document.getElementById("languageSelect").value;
-      const voiceIndex = document.getElementById("voiceSelect").value;
-      const selectedVoices = voices.filter(v => v.lang === lang);
-      const selectedVoice = selectedVoices[voiceIndex] || null;
-
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = lang;
-      if (selectedVoice) {
-        utter.voice = selectedVoice;
-      }
-
-      currentUtterance = utter;
-      speechSynthesis.speak(utter);
+  // Gửi câu hỏi bằng text
+  function askText() {
+    const text = document.getElementById("textInput").value;
+    if (text.trim()) {
+      sendToAPI(text);
     }
+  }
+</script>
 
-    function stopSpeaking() {
-      if (speechSynthesis.speaking || speechSynthesis.pending) {
-        speechSynthesis.cancel();
-      }
-    }
-
-    async function sendToAPI(text) {
-      document.getElementById("question").innerText = text;
-      try {
-        const res = await fetch("/api/ask", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: text })
-        });
-
-        const data = await res.json();
-        const answer = data.answer || "Không có câu trả lời.";
-        document.getElementById("answer").innerText = answer;
-        speakVietnamese(answer);
-      } catch (err) {
-        console.error("Lỗi fetch:", err);
-        document.getElementById("answer").innerText = "Không thể kết nối tới server.";
-        speakVietnamese("Không thể kết nối tới server.");
-      }
-    }
-
-    function startRecording() {
-      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      recognition.lang = document.getElementById("languageSelect").value;
-      recognition.start();
-      recognition.onresult = function (event) {
-        const text = event.results[0][0].transcript;
-        sendToAPI(text);
-      };
-      recognition.onerror = function (e) {
-        console.error("Lỗi ghi âm:", e.error);
-        alert("Không thể nhận diện giọng nói: " + e.error);
-      };
-    }
-
-    function askText() {
-      const text = document.getElementById("textInput").value;
-      if (text.trim()) {
-        sendToAPI(text);
-      }
-    }
-  </script>
 </body>
 </html>
