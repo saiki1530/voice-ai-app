@@ -41,20 +41,10 @@
 
     const filteredVoices = voices.filter(voice => voice.lang === selectedLang);
 
-    const defaultVoiceNameMap = {
-      'vi-VN': 'Google Tiếng Việt',
-      'en-US': 'Google US English',
-      'ja-JP': 'Google 日本語'
-    };
-
-    const defaultVoiceName = defaultVoiceNameMap[selectedLang];
-
-    if (filteredVoices.length === 0 && selectedLang === 'vi-VN') {
+    if (filteredVoices.length === 0) {
       const opt = document.createElement("option");
-      opt.value = defaultVoiceName;
-      opt.textContent = `${defaultVoiceName} (${selectedLang})`;
+      opt.textContent = "Không có giọng cho ngôn ngữ này";
       voiceSelect.appendChild(opt);
-      voiceSelect.value = defaultVoiceName;
       return;
     }
 
@@ -65,8 +55,14 @@
       voiceSelect.appendChild(opt);
     });
 
-    const defaultVoice = filteredVoices.find(v => v.name === defaultVoiceName);
-    voiceSelect.value = defaultVoice ? defaultVoice.name : filteredVoices[0]?.name;
+    const defaultVoiceNameMap = {
+      'vi-VN': 'Google Tiếng Việt',
+      'en-US': 'Google US English',
+      'ja-JP': 'Google 日本語'
+    };
+
+    const defaultVoice = filteredVoices.find(v => v.name === defaultVoiceNameMap[selectedLang]);
+    voiceSelect.value = defaultVoice ? defaultVoice.name : filteredVoices[0].name;
   }
 
   window.speechSynthesis.onvoiceschanged = loadVoices;
