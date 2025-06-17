@@ -41,10 +41,20 @@
 
     const filteredVoices = voices.filter(voice => voice.lang === selectedLang);
 
-    if (filteredVoices.length === 0) {
+    const defaultVoiceNameMap = {
+      'vi-VN': 'Google Tiếng Việt',
+      'en-US': 'Google US English',
+      'ja-JP': 'Google 日本語'
+    };
+
+    const defaultVoiceName = defaultVoiceNameMap[selectedLang];
+
+    if (filteredVoices.length === 0 && selectedLang === 'vi-VN') {
       const opt = document.createElement("option");
-      opt.textContent = "Không có giọng cho ngôn ngữ này";
+      opt.value = defaultVoiceName;
+      opt.textContent = `${defaultVoiceName} (${selectedLang})`;
       voiceSelect.appendChild(opt);
+      voiceSelect.value = defaultVoiceName;
       return;
     }
 
@@ -55,14 +65,8 @@
       voiceSelect.appendChild(opt);
     });
 
-    const defaultVoiceNameMap = {
-      'vi-VN': 'Google Tiếng Việt',
-      'en-US': 'Google US English',
-      'ja-JP': 'Google 日本語'
-    };
-
-    const defaultVoice = filteredVoices.find(v => v.name === defaultVoiceNameMap[selectedLang]);
-    voiceSelect.value = defaultVoice ? defaultVoice.name : filteredVoices[0].name;
+    const defaultVoice = filteredVoices.find(v => v.name === defaultVoiceName);
+    voiceSelect.value = defaultVoice ? defaultVoice.name : filteredVoices[0]?.name;
   }
 
   window.speechSynthesis.onvoiceschanged = loadVoices;
@@ -106,16 +110,9 @@
       });
 
       const data = await res.json();
-     const answer = data.answer || "Không có câu trả lời.";
-document.getElementById("answer").innerText = answer;
-
-if (data.audio_url && document.getElementById("languageSelect").value === "vi-VN") {
-  const audio = new Audio(data.audio_url);
-  audio.play();
-} else {
-  speakText(answer);
-}
-
+      const answer = data.answer || "Không có câu trả lời.";
+      document.getElementById("answer").innerText = answer;
+      speakText(answer);
     } catch (err) {
       console.error("Lỗi fetch:", err);
       document.getElementById("answer").innerText = "Không thể kết nối tới server.";
