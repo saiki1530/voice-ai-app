@@ -44,7 +44,7 @@
 
     if (filteredVoices.length === 0) {
       const opt = document.createElement("option");
-      opt.textContent = "Không có giọng cho ngôn ngữ này";
+      opt.textContent = "Google Tiếng Việt";
       voiceSelect.appendChild(opt);
       return;
     }
@@ -110,13 +110,12 @@
       const data = await res.json();
       const answer = data.answer || "Không có câu trả lời.";
       document.getElementById("answer").innerText = answer;
-
-      // 🔈 Nếu là tiếng Việt và có audio_url từ FPT.AI => dùng audio
+      
       if (lang === "vi-VN" && data.audio_url) {
         const audio = new Audio(data.audio_url);
         audio.play();
       } else {
-        speakText(answer); // fallback cho ngôn ngữ khác
+        speakText(answer); 
       }
 
     } catch (err) {
