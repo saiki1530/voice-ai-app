@@ -34,9 +34,10 @@
   let currentUtterance = null;
 
   function loadVoices() {
-    const voices = speechSynthesis.getVoices();
-    const selectedLang = document.getElementById("languageSelect").value;
     const voiceSelect = document.getElementById("voiceSelect");
+    const selectedLang = document.getElementById("languageSelect").value;
+    const voices = speechSynthesis.getVoices();
+
     voiceSelect.innerHTML = "";
 
     const filteredVoices = voices.filter(voice => voice.lang === selectedLang);
@@ -61,19 +62,13 @@
       'ja-JP': 'Google 日本語'
     };
 
-    const defaultVoice = filteredVoices.find(v => v.name === defaultVoiceNameMap[selectedLang]);
+    const defaultVoiceName = defaultVoiceNameMap[selectedLang];
+    const defaultVoice = filteredVoices.find(v => v.name === defaultVoiceName);
     voiceSelect.value = defaultVoice ? defaultVoice.name : filteredVoices[0].name;
   }
 
-  // Chờ voices load xong
-  if (typeof speechSynthesis !== "undefined") {
-    speechSynthesis.onvoiceschanged = () => {
-      setTimeout(loadVoices, 100); // delay 100ms để đảm bảo voices có đủ
-    };
-  }
-
-  // fallback
-  window.addEventListener("load", () => setTimeout(loadVoices, 200));
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+  loadVoices();
 
   function speakText(text) {
     stopSpeaking();
@@ -116,19 +111,22 @@
       const answer = data.answer || "Không có câu trả lời.";
       document.getElementById("answer").innerText = answer;
 
-      // Nếu có audio_url từ FPT thì phát, ngược lại dùng speechSynthesis
-      if (data.audio_url) {
+      // 🔈 Nếu là tiếng Việt và có audio_url từ FPT.AI => dùng audio
+      if (lang === "vi-VN" && data.audio_url) {
         const audio = new Audio(data.audio_url);
         audio.play();
       } else {
-        speakText(answer);
+        speakText(answer); // fallback cho ngôn ngữ khác
       }
 
     } catch (err) {
       console.error("Lỗi fetch:", err);
       const fallback = "Không thể kết nối tới server.";
       document.getElementById("answer").innerText = fallback;
-      speakText(fallback);
+
+      if (lang !== "vi-VN") {
+        speakText(fallback);
+      }
     }
   }
 
