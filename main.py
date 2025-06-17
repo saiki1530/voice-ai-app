@@ -7,6 +7,8 @@ from fastapi.concurrency import run_in_threadpool
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
+from static_data import STATIC_QA
+from difflib import get_close_matches
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -32,10 +34,21 @@ class Prompt(BaseModel):
 @app.post("/api/ask")
 async def ask(prompt: Prompt):
     try:
+        user_question = prompt.prompt.lower()
+
+        # So khớp gần đúng với các câu hỏi có sẵn
+        matches = get_close_matches(user_question, STATIC_QA.keys(), n=1, cutoff=0.5)
+
+        if matches:
+            matched_key = matches[0]
+            return {"answer": STATIC_QA[matched_key]}
+
+        # Nếu không có match nào phù hợp → gọi AI như cũ
         model = genai.GenerativeModel("gemini-1.5-flash")
-        prompt_vi = f"Trả lời bằng tiếng Việt: {prompt.prompt}"
+        prompt_vi = f"Trả lời bằng tiếng Việt: {user_question}"
         response = await run_in_threadpool(model.generate_content, prompt_vi)
         ai_reply = response.candidates[0].content.parts[0].text
         return {"answer": ai_reply}
+
     except Exception as e:
         return {"answer": f"Lỗi server: {str(e)}"}
