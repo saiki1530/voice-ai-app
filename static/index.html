@@ -39,14 +39,12 @@
     const voiceSelect = document.getElementById("voiceSelect");
     voiceSelect.innerHTML = "";
 
-    // Lọc giọng đúng ngôn ngữ
     const filteredVoices = voices.filter(voice => voice.lang === selectedLang);
 
     if (filteredVoices.length === 0) {
       const opt = document.createElement("option");
       opt.textContent = "Không có giọng cho ngôn ngữ này";
       voiceSelect.appendChild(opt);
-      console.warn("Không tìm thấy giọng đọc:", selectedLang);
       return;
     }
 
@@ -57,7 +55,6 @@
       voiceSelect.appendChild(opt);
     });
 
-    // Ưu tiên chọn giọng mặc định đẹp nếu có
     const defaultVoiceNameMap = {
       'vi-VN': 'Google Tiếng Việt',
       'en-US': 'Google US English',
@@ -65,11 +62,7 @@
     };
 
     const defaultVoice = filteredVoices.find(v => v.name === defaultVoiceNameMap[selectedLang]);
-    if (defaultVoice) {
-      voiceSelect.value = defaultVoice.name;
-    } else {
-      voiceSelect.selectedIndex = 0; // fallback
-    }
+    voiceSelect.value = defaultVoice ? defaultVoice.name : filteredVoices[0].name;
   }
 
   window.speechSynthesis.onvoiceschanged = loadVoices;
@@ -100,11 +93,16 @@
 
   async function sendToAPI(text) {
     document.getElementById("question").innerText = text;
+    const lang = document.getElementById("languageSelect").value;
+
     try {
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text })
+        body: JSON.stringify({
+          prompt: text,
+          lang: lang
+        })
       });
 
       const data = await res.json();
@@ -127,7 +125,6 @@
       sendToAPI(text);
     };
     recognition.onerror = function (e) {
-      console.error("Lỗi ghi âm:", e.error);
       alert("Không thể nhận diện giọng nói: " + e.error);
     };
   }
@@ -139,7 +136,5 @@
     }
   }
 </script>
-
-
 </body>
 </html>
