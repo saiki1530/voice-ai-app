@@ -1,6 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
@@ -10,9 +10,14 @@ from difflib import get_close_matches
 import google.generativeai as genai
 import unicodedata
 import os
+import requests
+import io
+import uuid
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+FPT_API_KEY = os.getenv("FPT_TTS_API_KEY")
 
 app = FastAPI()
 
@@ -31,7 +36,7 @@ def serve_frontend():
 
 class Prompt(BaseModel):
     prompt: str
-    lang: str  # Thêm ngôn ngữ
+    lang: str = "vi-VN"
 
 def normalize(text):
     text = text.lower().strip()
@@ -44,27 +49,63 @@ async def ask(prompt: Prompt):
     try:
         user_question_raw = prompt.prompt
         user_question = normalize(user_question_raw)
-        lang = prompt.lang
 
         normalized_static_qa = {normalize(k): v for k, v in STATIC_QA.items()}
         matches = get_close_matches(user_question, normalized_static_qa.keys(), n=1, cutoff=0.5)
 
         if matches:
-            matched_key = matches[0]
-            return {"answer": normalized_static_qa[matched_key]}
+            ai_reply = normalized_static_qa[matches[0]]
+        else:
+            model = genai.GenerativeModel("gemini-1.5-flash")
 
-        # Ngôn ngữ tương ứng
-        prefix_by_lang = {
-            "vi-VN": "Trả lời bằng tiếng Việt:",
-            "en-US": "Answer in English:",
-            "ja-JP": "日本語で答えてください："
+            if prompt.lang == "en-US":
+                prompt_text = f"Answer in English: {user_question_raw}"
+            elif prompt.lang == "ja-JP":
+                prompt_text = f"日本語で答えてください: {user_question_raw}"
+            else:
+                prompt_text = f"Trả lời bằng tiếng Việt: {user_question_raw}"
+
+            response = await run_in_threadpool(model.generate_content, prompt_text)
+            ai_reply = response.candidates[0].content.parts[0].text
+
+        audio_url = None
+        if prompt.lang == "vi-VN" and FPT_API_KEY:
+            tts_response = await run_in_threadpool(
+                requests.post,
+                "https://api.fpt.ai/hmi/tts/v5",
+                headers={
+                    "api-key": FPT_API_KEY,
+                    "speed": "1",
+                    "voice": "banmai",
+                },
+                data=ai_reply.encode("utf-8")
+            )
+            if tts_response.status_code == 200:
+                audio_url = tts_response.json().get("async")
+
+        return {
+            "answer": ai_reply,
+            "audio_url": audio_url
         }
 
-        prompt_lang = f"{prefix_by_lang.get(lang, 'Answer:')} {user_question_raw}"
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = await run_in_threadpool(model.generate_content, prompt_lang)
-        ai_reply = response.candidates[0].content.parts[0].text
-        return {"answer": ai_reply}
-
     except Exception as e:
-        return {"answer": f"Lỗi server: {str(e)}"}
+        return {"answer": f"Lỗi server: {str(e)}", "audio_url": None}
+
+@app.get("/api/tts")
+def get_tts(text: str):
+    if not FPT_API_KEY:
+        return JSONResponse(content={"error": "Thiếu API Key cho FPT.AI"}, status_code=500)
+
+    headers = {
+        "api-key": FPT_API_KEY,
+        "speed": "1",
+        "voice": "banmai",
+    }
+    res = requests.post("https://api.fpt.ai/hmi/tts/v5", data=text.encode('utf-8'), headers=headers)
+
+    if res.status_code == 200:
+        audio_url = res.json().get("async")
+        audio_data = requests.get(audio_url).content
+        return StreamingResponse(io.BytesIO(audio_data), media_type="audio/mp3")
+    else:
+        return JSONResponse(content={"error": "TTS failed"}, status_code=500)
