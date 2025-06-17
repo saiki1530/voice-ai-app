@@ -65,8 +65,15 @@
     voiceSelect.value = defaultVoice ? defaultVoice.name : filteredVoices[0].name;
   }
 
-  window.speechSynthesis.onvoiceschanged = loadVoices;
-  loadVoices();
+  // Chờ voices load xong
+  if (typeof speechSynthesis !== "undefined") {
+    speechSynthesis.onvoiceschanged = () => {
+      setTimeout(loadVoices, 100); // delay 100ms để đảm bảo voices có đủ
+    };
+  }
+
+  // fallback
+  window.addEventListener("load", () => setTimeout(loadVoices, 200));
 
   function speakText(text) {
     stopSpeaking();
@@ -108,11 +115,20 @@
       const data = await res.json();
       const answer = data.answer || "Không có câu trả lời.";
       document.getElementById("answer").innerText = answer;
-      speakText(answer);
+
+      // Nếu có audio_url từ FPT thì phát, ngược lại dùng speechSynthesis
+      if (data.audio_url) {
+        const audio = new Audio(data.audio_url);
+        audio.play();
+      } else {
+        speakText(answer);
+      }
+
     } catch (err) {
       console.error("Lỗi fetch:", err);
-      document.getElementById("answer").innerText = "Không thể kết nối tới server.";
-      speakText("Không thể kết nối tới server.");
+      const fallback = "Không thể kết nối tới server.";
+      document.getElementById("answer").innerText = fallback;
+      speakText(fallback);
     }
   }
 
