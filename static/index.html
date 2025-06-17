@@ -31,55 +31,87 @@
 
 <script>
   let voices = [];
+  let currentUtterance = null;
+  let currentAudio = null;
 
-  // Tải danh sách giọng nói
+  // Load giọng nói và đổ vào dropdown
   function loadVoices() {
     voices = speechSynthesis.getVoices();
-    console.log("Available voices:", voices.map(v => `${v.name} (${v.lang})`));
+    const lang = document.getElementById("languageSelect").value;
+    const voiceSelect = document.getElementById("voiceSelect");
+
+    voiceSelect.innerHTML = "";
+
+    voices
+      .filter(v => v.lang === lang)
+      .forEach(v => {
+        const option = document.createElement("option");
+        option.value = v.name;
+        option.textContent = `${v.name} (${v.lang})`;
+        voiceSelect.appendChild(option);
+      });
   }
 
   window.speechSynthesis.onvoiceschanged = loadVoices;
   loadVoices();
 
-  // Phát tiếng Anh bằng speechSynthesis
-  function speakEnglish(text) {
-    const englishVoice = voices.find(v =>
-      v.lang.startsWith("en") && v.name.toLowerCase().includes("google")
-    );
+  // Dừng đọc
+  function stopSpeaking() {
+    speechSynthesis.cancel();
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
+  }
+
+  // Phát bằng Web Speech API
+  function speakWithSpeechSynthesis(text, lang, voiceName) {
+    stopSpeaking();
     const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "en-US";
-    if (englishVoice) utter.voice = englishVoice;
+    utter.lang = lang;
+
+    const selectedVoice = voices.find(v => v.name === voiceName && v.lang === lang);
+    if (selectedVoice) utter.voice = selectedVoice;
+
+    currentUtterance = utter;
     speechSynthesis.speak(utter);
   }
 
-  // Phát tiếng Việt bằng API FPT.AI
+  // Phát tiếng Việt qua FPT.AI
   async function speakVietnameseFPT(text) {
-    const res = await fetch("/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text })
-    });
+    stopSpeaking();
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
 
-    const data = await res.json();
-    if (data.audio_url) {
-      const audio = new Audio(data.audio_url);
-      audio.play();
-    } else {
-      alert("Không thể phát tiếng Việt.");
+      const data = await res.json();
+      if (data.audio_url) {
+        currentAudio = new Audio(data.audio_url);
+        currentAudio.play();
+      } else {
+        alert("Không thể phát tiếng Việt.");
+      }
+    } catch (err) {
+      console.error("Lỗi FPT TTS:", err);
     }
   }
 
-  // Nhận diện tiếng và chọn cách phát
+  // Xác định và phát
   function detectLangAndSpeak(text) {
-    const isEnglish = /^[a-zA-Z0-9\s.,!?'"():\-]+$/.test(text.trim());
-    if (isEnglish) {
-      speakEnglish(text);
+    const lang = document.getElementById("languageSelect").value;
+    const voiceName = document.getElementById("voiceSelect").value;
+
+    if (lang === "vi-VN") {
+      speakVietnameseFPT(text); // dùng FPT.AI nếu có tích hợp
     } else {
-      speakVietnameseFPT(text);
+      speakWithSpeechSynthesis(text, lang, voiceName);
     }
   }
 
-  // Gửi câu hỏi đến API AI backend
+  // Gửi tới API AI
   async function sendToAPI(text) {
     document.getElementById("question").innerText = text;
     try {
@@ -99,17 +131,6 @@
     }
   }
 
-  // Nhận giọng nói từ người dùng
-  function startRecording() {
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.lang = 'vi-VN';
-    recognition.start();
-    recognition.onresult = function (event) {
-      const text = event.results[0][0].transcript;
-      sendToAPI(text);
-    };
-  }
-
   // Gửi câu hỏi bằng text
   function askText() {
     const text = document.getElementById("textInput").value;
@@ -117,7 +138,19 @@
       sendToAPI(text);
     }
   }
+
+  // Nhận giọng nói từ người dùng
+  function startRecording() {
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = "vi-VN"; // có thể thay đổi nếu cần
+    recognition.start();
+    recognition.onresult = function (event) {
+      const text = event.results[0][0].transcript;
+      sendToAPI(text);
+    };
+  }
 </script>
+
 
 </body>
 </html>
