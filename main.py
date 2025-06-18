@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
@@ -11,7 +11,8 @@ import google.generativeai as genai
 import unicodedata
 import os
 import requests
-import io
+import time
+import uuid
 
 # Load biến môi trường
 load_dotenv()
@@ -72,7 +73,7 @@ async def ask(prompt: Prompt):
             response = await run_in_threadpool(model.generate_content, prompt_text)
             ai_reply = response.candidates[0].content.parts[0].text
 
-        # Gửi văn bản đến FPT nếu ngôn ngữ là tiếng Việt
+        # Xử lý TTS nếu tiếng Việt
         audio_url = None
         if prompt.lang == "vi-VN" and FPT_API_KEY:
             tts_response = await run_in_threadpool(
@@ -86,7 +87,23 @@ async def ask(prompt: Prompt):
                 data=ai_reply.encode("utf-8")
             )
             if tts_response.status_code == 200:
-                audio_url = tts_response.json().get("async")
+                async_url = tts_response.json().get("async")
+
+                # Chờ FPT xử lý (có thể thay bằng polling sau)
+                time.sleep(3)
+
+                # Lấy file âm thanh về
+                audio_data = requests.get(async_url).content
+
+                # Lưu vào file tạm
+                filename = f"{uuid.uuid4().hex}.mp3"
+                audio_path = os.path.join("static", "tts", filename)
+                os.makedirs(os.path.dirname(audio_path), exist_ok=True)
+
+                with open(audio_path, "wb") as f:
+                    f.write(audio_data)
+
+                audio_url = f"/static/tts/{filename}"
 
         return {
             "answer": ai_reply,
@@ -95,22 +112,3 @@ async def ask(prompt: Prompt):
 
     except Exception as e:
         return {"answer": f"Lỗi server: {str(e)}", "audio_url": None}
-
-@app.get("/api/tts")
-def get_tts(text: str):
-    if not FPT_API_KEY:
-        return JSONResponse(content={"error": "Thiếu API Key cho FPT.AI"}, status_code=500)
-
-    headers = {
-        "api-key": FPT_API_KEY,
-        "speed": "1",
-        "voice": "banmai",
-    }
-    res = requests.post("https://api.fpt.ai/hmi/tts/v5", data=text.encode('utf-8'), headers=headers)
-
-    if res.status_code == 200:
-        audio_url = res.json().get("async")
-        audio_data = requests.get(audio_url).content
-        return StreamingResponse(io.BytesIO(audio_data), media_type="audio/mp3")
-    else:
-        return JSONResponse(content={"error": "TTS failed"}, status_code=500)
