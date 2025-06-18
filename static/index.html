@@ -6,7 +6,7 @@
 </head>
 <body>
   <h2>Hỏi AI bằng giọng nói hoặc gõ câu hỏi</h2>
-  <button onclick="startRecording()">🎤 Nhấn để nói</button>
+  <button onclick="startRecording()">Nhấn để nói</button>
 
   <div style="margin-top: 20px;">
     <input type="text" id="textInput" placeholder="Hoặc nhập câu hỏi tại đây..." style="width: 300px; padding: 8px;" />
@@ -25,6 +25,10 @@
     <select id="voiceSelect"></select>
 
     <button onclick="stopSpeaking()" style="margin-left: 10px;">Dừng đọc</button>
+  </div>
+
+  <div id="loading" style="display: none; margin-top: 20px; color: blue;">
+    Đang xử lý, vui lòng chờ...
   </div>
 
   <p><strong>Bạn hỏi:</strong> <span id="question"></span></p>
@@ -56,7 +60,6 @@
       voiceSelect.appendChild(opt);
     });
 
-    // Auto chọn mặc định
     const defaultVoiceNameMap = {
       'vi-VN': 'Google Tiếng Việt',
       'en-US': 'Google US English',
@@ -96,7 +99,11 @@
 
   async function sendToAPI(text) {
     document.getElementById("question").innerText = text;
+    document.getElementById("answer").innerText = "";
     const lang = document.getElementById("languageSelect").value;
+
+    const loadingDiv = document.getElementById("loading");
+    loadingDiv.style.display = "block";
 
     try {
       const res = await fetch("/api/ask", {
@@ -124,6 +131,8 @@
       if (lang !== "vi-VN") {
         speakText(fallback);
       }
+    } finally {
+      loadingDiv.style.display = "none";
     }
   }
 
